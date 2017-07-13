@@ -1,35 +1,32 @@
-# cache-component [![stability][0]][1]
+# nanocomponent [![stability][0]][1]
 [![npm version][2]][3] [![build status][4]][5]
 [![downloads][8]][9] [![js-standard-style][10]][11]
 
-Cached [bel][bel] components. Makes rendering elements _very fast™_. Analogous to
-React's `.shouldComponentUpdate()` method, but only using native DOM methods.
-
-Runs a `_render` function whenever arguments changed according to an `_update` function.
-If the `_update` function determines an update is needed, a newly `_render`ed bel element is calculated and then [`nanomorph`][nm]ed onto the children nodes of the last render.
-After the first render, a `_proxy` element is always returned.  When the component is removed from the live DOM tree, all internal proxy and element references are deleted.
+Native DOM components that pair nicely with DOM diffing algorithms.
 
 ## Features
-- makes rendering elements _very fast™_
-- implemented in only a few lines
-- only uses native DOM methods
-- Class based components, which offer a great place to store methods for re-use.
+- Isolate native DOM libraries from DOM diffing algorithms
+- Makes rendering elements _very fast™_ by avoiding unnecessary rendering
+- Component nesting and state update passthrough
+- Implemented in only a few lines
+- Only uses native DOM methods
+- Class based components offering a familiar component structure
+- Works well with [bel][bel] and [yoyoify][yoyoify]
 
 ## Usage
-
 ```js
-// Implementer API
-var CacheComponent = require('cache-component')
+// button.js
+var Nanocomponent = require('nanocomponent')
 var html = require('bel')
 
-function CachedButton () {
-  if (!(this instanceof CachedButton)) return new CachedButton()
+function Button () {
+  if (!(this instanceof Button)) return new Button()
   this._color = null
-  CacheComponent.call(this)
+  Nanocomponent.call(this)
 }
-CachedButton.prototype = Object.create(CacheComponent.prototype)
+Button.prototype = Object.create(Nanocomponent.prototype)
 
-CachedButton.prototype._render = function (color) {
+Button.prototype._render = function (color) {
   this._color = color
   return html`
     <button style="background-color: ${color}">
@@ -39,90 +36,191 @@ CachedButton.prototype._render = function (color) {
 }
 
 // Override default shallow compare _update function
-CachedButton.prototype._update = function (newColor) {
+Button.prototype._update = function (newColor) {
   return newColor !== this._color
 }
-
-var element = CachedButton()
-
-let el = element.render('red') // creates new element
-let el = element.render('red') // returns cached element (proxy)
-let el = element.render('blue') // returns cached element (proxy) and mutates children
-
 ```
 
 ```js
-// Consumer API
-var CachedButton = require('./cached-button.js')
-var cachedButton = CachedButton()
-document.body.appendChild(cachedButton.render('green'))
+// index.js
+var choo = require('choo')
+
+var Button = require('./button.js')
+var button = Button()
+
+var app = choo()
+app.route('/', mainView)
+app.mount('body')
+
+function mainView (state, emit) {
+  return html`
+    <body>
+      ${button.render(state.color)}
+    </body>
+  `
+}
+
+app.use(function (state, emitter) {
+  state.color = 'green'
+})
 ```
 
-## API
+## Patterns
+These are some common patterns you might encounter when writing components.
 
-### `CacheComponent.prototype()`
-Inheritable CachedComponent prototype. Should be inherited from using
-`CacheComponent.call(this)` and `prototype =
-Object.create(CacheComponent.prototype)`.
-
-Internal properties are:
-
-- `this._proxy`: proxy element that's returned on subsequent
-  `render()` calls that don't pass the `._update()` check.
-- `this._element`: rendered element that should be returned from the
-  `._render()` call.  This is a DOM pointer to the DOM node in the live DOM tree that you actually see and interact with.
-- `this._hasWindow`: boolean if `window` exists. Can be used to create
-  elements that render both in the browser and in Node.
-- `this._args`: a reference to the arguments array that was used during the last `_render()` call.
-
-### `CacheComponent.prototype._render([arguments])`
-__Must be implemented.__ Render an HTML node with arguments. The Node that's returned is cached as
-`this._element`.  Only called on first render and whenever you return `true` from `prototype._update()`.
-You must return a DOM node from this function on every call.
-
-### `CacheComponent.prototype._update([arguments])`
-Return a boolean to determine if `prototype._render()`
-should be called.  Not called on the first render.  Defaults to the following shallow compare function:
+### Standalone
+Nanocomponents is part of the choo ecosystem, but works great standalone!
 
 ```js
-CacheElement.prototype._update = function () {
-  var length = arguments.length
-  if (length !== this._args.length) return true
+var Button = require('./button.js')
+var button = new Button()
 
-  for (var i = 0; i < length; i++) {
-    if (arguments[i] !== this._args[i]) return true
-  }
-  return false
+// Attach to DOM
+document.body.appendChild(button.render('green'))
+
+// Update mounted component
+button.render('green')
+button.render('red')
+
+// Log a reference to the mounted dom node
+console.log(button.element)
+```
+
+### Binding event handlers as component methods
+
+Sometimes it's useful to be pass around prototype methods into other functions.
+This can be done by binding the method that's going to be passed around:
+
+```js
+var Nanocomponent = require('nanocomponent')
+var html = require('bel')
+
+function Component () {
+  if (!(this instanceof Button)) return new Component()
+  Nanocomponent.call(this)
+
+  // Bind the method so it can be passed around
+  this._handleClick = this._handleClick.bind(this)
+}
+Component.prototype = Object.create(Nanocomponent.prototype)
+
+Component.prototype._handleClick = function () {
+  console.log('element is', this.element)
+}
+
+Component.prototype._render = function () {
+  return html`<div>My component</div>`
 }
 ```
 
-### `CacheComponent.prototype._willMount(el)`
+### ES6 Class Syntax
 
-Called before returning a fully rendered dom node that is presumably inserted into the document.  This is called on first render, and once every
-subsequent render after the element is found to have been removed from the dom.  It gets passed a reference `el` to the dom node that will be returned.
+Because Class syntax is just sugar for prototype code, Nanocomponent can be
+written using Classes too:
 
-### `CacheComponent.prototype._didMount(el)`
+```js
+var Nanocomponent = require('nanocomponent')
+var html = require('bel')
 
-This function is called after the fully rendered dom node is returned and receives a reference `el` to that dom node.   In practice, this hooks indicates
-the dom node has been mounted and can be interacted with to set scroll position and other attributes.
+class Component extends Nanocomponent {
+  constructor () {
+    super()
+    this._color = null
+  }
 
-### `CacheComponent.prototype._willUpdate(el)`
+  _render (color) {
+    this._color = color
+    return html`
+      <div style="background-color: ${color}">
+        Color is ${color}
+      </div>
+    `
+  }
 
-Called before the component will update.  `_willUpdate` gets a `el` reference so that you can modify the element that will be use to internally morph the mounted dom node.
+  _update (newColor) {
+    return newColor !== this._color
+  }
+}
+```
 
-### `CacheComponent.prototype._didUpdate()`
+### Mutating the components instead of re-rendering
+Sometimes you might want to mutate the element that's currently mounted, rather
+than performing DOM diffing. Think cases like third party widgets that manage
+themselves.
 
-Called after a mounted component updates.  You can use this hook to call scroll to or other dom methods on the mounted component.
-You can access `this._element` to reference the root node mounted in the page.  This hook does not get a `el` argument as this node is tossed away at this stage.
+```js
+var Nanocomponent = require('nanocomponent')
+var html = require('bel')
 
+function Component () {
+  if (!(this instanceof Button)) return new Component()
+  Nanocomponent.call(this)
+  this._text = ''
+}
+Component.prototype = Object.create(Nanocomponent.prototype)
 
-## Installation
-```sh
-$ npm install cache-component
+Component.prototype._render = function (text) {
+  this._text = text
+  return html`<h1>${text}</h1>`
+}
+
+Component.prototype._update = function (text) {
+  if (text !== this._text) {
+    this._text = text
+    this.element.innerText = this._text   // Directly update the element
+  }
+  return false                            // Don't call _render again
+}
+
+Component.prototype._unload = function (text) {
+  console.log('No longer mounted on the DOM!')
+}
+```
+
+### Nested components and component containers
+Components nest and can skip renders at intermediary levels.  Components can
+also act as containers that shape app data flowing into view specific
+components.
+
+```js
+var Nanocomponent = require('nanocomponent')
+var html = require('bel')
+var Button = require('./button.js')
+
+function Component () {
+  if (!(this instanceof Button)) return new Component()
+  Nanocomponent.call(this)
+  this._button1 = new Button ()
+  this._button2 = new Button ()
+  this._button3 = new Button ()
+}
+Component.prototype = Object.create(Nanocomponent.prototype)
+
+Component.prototype._render = function (state) {
+  var colorArray = this._shapeData(state)
+  return html`
+    <div>
+      ${this._button1.render(colorArray[0])}
+      ${this._button2.render(colorArray[1])}
+      ${this._button3.render(colorArray[2])}
+    </div>
+  `
+}
+
+Component.prototype._update = function (state) {
+  var colorArray = this._shapeData(state) // process app specific data in a container
+  this._button1.render(colorArray[0]) // pass processed data to owned children components
+  this._button2.render(colorArray[1])
+  this._button3.render(colorArray[2])
+  return false // always return false when mounted
+}
+
+Component.prototype._shapeData = function (state) {
+  return [state.colors.color1, state.colors.color2, state.colors.color3]
+}
 ```
 
 ## FAQ
-
 ### Where does this run?
 Make sure you're running a diffing engine that checks for `.isSameNode()`, if
 it doesn't you'll end up with super weird results because proxy nodes will
@@ -163,60 +261,97 @@ nodes.
 Since [v2.1.0][210] `morphdom` also runs `Node.isSameNode(otherNode)`. This
 allows us to override the function and replace it with a custom function that
 proxies an existing node. Check out the code to see how it works. The result is
-that if every element in our tree uses `cache-component`, only elements that have
-changed will be recomputed and rerendered making things very fast.
+that if every element in our tree uses `nanocomponent`, only elements that have
+changed will be recomputed and re-rendered making things very fast.
 
-`nanomorph`, which saw first use in choo 5, has supported `isSameNode` since it's conception.
+`nanomorph`, which saw first use in choo 5, has supported `isSameNode` since
+its conception.
 
-### What's the exact difference between cache-component and nanocomponent?
-- `cache-component` is very similar to nanocomponent, except it handles morphing for you if you want by re-running the _render function.  It works similar to react's component class.  Additionally, it retains the class interface so you can store your event handlers on the prototype chain and on the class instance.  Once the component is rendered + mounted in the DOM for the first time, cache-component always returns a proxy node.
-- `nanocomponent` will render a new node initially and always return a proxy node on
-  subsequent calls to `prototype.render`.  This means the component is responsible for
-  mutating any internal changes.
+## API
+### `component = Nanocomponent()`
+Create a new Nanocomponent instance. Additional methods can be set on the
+prototype.
 
-### Whats the relationship beteen `cache-component` and [`cache-element`][ce]?
+### `component.render([…arguments])`
+Render the component. Returns a proxy node if already mounted on the DOM. Proxy
+nodes make it so DOM diffing algorithms leave the element alone when diffing.
 
-This module was essentially a merge of [`cache-element`][ce] v2.0.1 with the API of [`nanomorph`][nm]
-before [`cache-element`][ce] switched over to using [`nanomorph`][nm] and essentially had a different purpose.
-There are still ongoing discussions on the future of [`cache-element`][ce].  The idea behind the inheritance
-API is that it provides a handy place to store event handler functions so they don't get redeclared
-between render frames like inline functions do.
+### `component.element`
+A [getter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get)
+property that returns the component's DOM node if its mounted in the page and
+`null` when its not.
+
+### `DOMNode = Nanocomponent.prototype._render([arguments…])`
+__Must be implemented.__ Component specific render function.  Optionally cache
+argument values here.  Run anything here that needs to run along side node
+rendering.  Must return a DOMNode. Use `_willRender` to run code after
+`_render` when the component is unmounted.
+
+### `Boolean = Nanocomponent.prototype._update([arguments…])`
+__Should be implemented.__ Return a boolean to determine if
+`prototype._render()` should be called.  The `_update` method is analogous to
+React's `shouldComponentUpdate`. Called only when the component is mounted in
+the DOM tree.
+
+### `Nanocomponent.prototype._willRender(el)`
+A function called right after `_render` returns, but before the fully rendered
+element is returned to the `render` caller.  Receives a reference to the
+returning element `el`. Run any first render hooks here. The `_load` and
+`_unload` hooks are added at this stage.
+
+### `Nanocomponent.prototype._load()`
+Called when the component is mounted on the DOM. Uses [on-load][onload] under
+the hood.
+
+### `Nanocomponent.prototype._unload()`
+Called when the component is removed from the DOM. Uses [on-load][onload] under
+the hood.
+
+### `Nanocomponent.prototype._didUpdate()`
+Called after a mounted component updates.  You can use this hook to call
+`element.scrollIntoView` or other dom methods on the mounted component. You
+can access `this.element` to reference the root node mounted in the page.
+
+## Installation
+```sh
+$ npm install nanocomponent
+```
 
 ## See Also
+- [choojs/choo](https://github.com/choojs/choo)
 - [shama/bel](https://github.com/shama/bel)
-- [yoshuawuyts/nanomorph](https://github.com/yoshuawuyts/nanomorph)
-- [yoshuawuyts/nanoraf](https://github.com/yoshuawuyts/nanoraf)
 - [shama/on-load](https://github.com/shama/on-load)
 - [yoshuawuyts/observe-resize](https://github.com/yoshuawuyts/observe-resize)
 - [bendrucker/document-ready](https://github.com/bendrucker/document-ready)
 - [yoshuawuyts/on-intersect](https://github.com/yoshuawuyts/on-intersect)
 - [yoshuawuyts/on-idle](https://github.com/yoshuawuyts/on-idle)
-- [yoshuawuyts/nanobounce](https://github.com/yoshuawuyts/nanobounce)
-- [yoshuawuyts/nanoframe](https://github.com/yoshuawuyts/nanoframe)
 
 ## Similar Packages
 - [shama/base-element](https://github.com/shama/base-element)
-- [yoshuawuyts/cache-element][ce]
+- [yoshuawuyts/cache-element](https://github.com/yoshuawuyts/cache-element)
 - [yoshuawuyts/microcomponent](https://github.com/yoshuawuyts/microcomponent)
-- [yoshuawuyts/nanocomponent](https://github.com/yoshuawuyts/nanocomponent)
 
 ## License
 [MIT](https://tldrlegal.com/license/mit-license)
 
 [0]: https://img.shields.io/badge/stability-experimental-orange.svg?style=flat-square
 [1]: https://nodejs.org/api/documentation.html#documentation_stability_index
-[2]: https://img.shields.io/npm/v/cache-component.svg?style=flat-square
-[3]: https://npmjs.org/package/cache-component
-[4]: https://img.shields.io/travis/hypermodules/cache-component/master.svg?style=flat-square
-[5]: https://travis-ci.org/hypermodules/cache-component
-[6]: https://img.shields.io/codecov/c/github/hypermodules/cache-component/master.svg?style=flat-square
-[7]: https://codecov.io/github/hypermodules/cache-component
-[8]: http://img.shields.io/npm/dm/cache-component.svg?style=flat-square
-[9]: https://npmjs.org/package/cache-component
+[2]: https://img.shields.io/npm/v/nanocomponent.svg?style=flat-square
+[3]: https://npmjs.org/package/nanocomponent
+[4]: https://img.shields.io/travis/choojs/nanocomponent/master.svg?style=flat-square
+[5]: https://travis-ci.org/choojs/nanocomponent
+[6]: https://img.shields.io/codecov/c/github/choojs/cache-component/master.svg?style=flat-square
+[7]: https://codecov.io/github/choojs/nanocomponent
+[8]: http://img.shields.io/npm/dm/nanocomponent.svg?style=flat-square
+[9]: https://npmjs.org/package/nanocomponent
 [10]: https://img.shields.io/badge/code%20style-standard-brightgreen.svg?style=flat-square
 [11]: https://github.com/feross/standard
 [bel]: https://github.com/shama/bel
+[yoyoify]: https://github.com/shama/yo-yoify
 [md]: https://github.com/patrick-steele-idem/morphdom
 [210]: https://github.com/patrick-steele-idem/morphdom/pull/81
 [nm]: https://github.com/yoshuawuyts/nanomorph
 [ce]: https://github.com/yoshuawuyts/cache-element
+[class]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes
+[isSameNode]: https://github.com/choojs/nanomorph#caching-dom-elements
+[onload]: https://github.com/shama/on-load
