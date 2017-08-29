@@ -9,6 +9,10 @@ Runs a `_render` function whenever arguments changed according to an `_update` f
 If the `_update` function determines an update is needed, a newly `_render`ed bel element is calculated and then [`nanomorph`][nm]ed onto the children nodes of the last render.
 After the first render, a `_proxy` element is always returned.  When the component is removed from the live DOM tree, all internal proxy and element references are deleted.
 
+## Deprecation Warning
+
+**This module is deprecated! Please use [nanocompoment](https://github.com/choojs/nanocomponent) instead.**
+
 ## Features
 - makes rendering elements _very fast™_
 - implemented in only a few lines
@@ -203,7 +207,7 @@ between render frames like inline functions do.
 ## License
 [MIT](https://tldrlegal.com/license/mit-license)
 
-[0]: https://img.shields.io/badge/stability-experimental-orange.svg?style=flat-square
+[0]: https://img.shields.io/badge/stability-deprecated-red.svg?style=flat-square
 [1]: https://nodejs.org/api/documentation.html#documentation_stability_index
 [2]: https://img.shields.io/npm/v/cache-component.svg?style=flat-square
 [3]: https://npmjs.org/package/cache-component
