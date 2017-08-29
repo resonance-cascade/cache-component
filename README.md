@@ -11,7 +11,7 @@ After the first render, a `_proxy` element is always returned.  When the compone
 
 ## Deprecation Warning
 
-**This module is deprecated! Please use [nanocompoment](https://github.com/choojs/nanocomponent) instead.**
+**This module is deprecated! Please use [nanocomponent](https://github.com/choojs/nanocomponent) instead.**
 
 ## Features
 - makes rendering elements _very fast™_
